@@ -21,3 +21,6 @@ Thumbs.db
 # Console (React)
 node_modules/
 dist/
+
+# Personal notes: kept locally, not pushed
+docs/
