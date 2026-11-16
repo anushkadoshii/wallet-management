@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kosh-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}          # read from .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data                     # named volume: data survives
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro      # init scripts, read-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
