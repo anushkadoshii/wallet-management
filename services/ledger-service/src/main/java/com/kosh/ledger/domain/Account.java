@@ -42,4 +42,28 @@ public class Account {
     public AccountStatus getStatus() { return this.status; }
     public Instant getCreatedAt() { return this.createdAt; }
 
+    public boolean isSystemAccount() {
+        if (this.type == AccountType.CUSTOMER_WALLET || this.type == AccountType.MERCHANT) {
+            return false;
+        }
+        return true;
+    }
+
+    public void changeStatus(AccountStatus newStatus) {
+        if (newStatus == null) {
+            throw new InvalidStatusChangeException("status is required");
+        }
+        if (this.isSystemAccount()) {
+            throw new InvalidStatusChangeException("Status cannot be changed for System Accounts.");
+        }
+        if (this.status == newStatus) return;
+        if ((this.status == AccountStatus.ACTIVE && newStatus == AccountStatus.FROZEN) ||
+            (this.status == AccountStatus.FROZEN && newStatus == AccountStatus.ACTIVE)) {
+            this.status = newStatus;
+        }
+        else {
+            throw new InvalidStatusChangeException("Status change from " + this.status.toString() + " to " + newStatus.toString() + " is not valid");
+        }
+    }
+
 }

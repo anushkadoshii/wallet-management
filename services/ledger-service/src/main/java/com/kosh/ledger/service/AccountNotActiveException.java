@@ -16,6 +16,6 @@ public class AccountNotActiveException extends RuntimeException {
     }
 
     public UUID getAccountId() {return accountId;}
-    public AccountStatus geStatus() {return status;}
+    public AccountStatus getStatus() {return status;}
     
 }
