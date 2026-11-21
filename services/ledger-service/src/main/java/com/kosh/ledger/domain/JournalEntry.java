@@ -6,9 +6,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.annotations.Immutable;
+
 import jakarta.persistence.*;
 
 @Entity 
+@Immutable 
 @Table(name = "journal_entry")
 public class JournalEntry {
     
