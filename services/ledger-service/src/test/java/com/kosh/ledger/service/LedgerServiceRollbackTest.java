@@ -1,5 +1,6 @@
 package com.kosh.ledger.service;
 
+import com.kosh.ledger.TestcontainersConfiguration;
 import com.kosh.ledger.domain.Account;
 import com.kosh.ledger.domain.AccountType;
 import com.kosh.ledger.domain.Balance;
@@ -10,6 +11,7 @@ import com.kosh.ledger.repository.JournalEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * NOT @Transactional on purpose, so post() commits or rolls back for real.
  */
 @SpringBootTest
+@Import(TestcontainersConfiguration.class)
 class LedgerServiceRollbackTest {
 
     @Autowired LedgerService ledger;
