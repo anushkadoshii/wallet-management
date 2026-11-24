@@ -14,6 +14,7 @@ import com.kosh.ledger.domain.Posting;
 import java.time.Instant;
 
 
+
 public interface PostingRepository extends JpaRepository<Posting, UUID>{
     @EntityGraph(attributePaths = "entry")
     @Query("""
@@ -22,4 +23,9 @@ public interface PostingRepository extends JpaRepository<Posting, UUID>{
         AND p.postedAt >= :from AND p.postedAt < :to
         AND (:type IS NULL OR e.type = :type) """)
     Page<Posting> findStatement(UUID accountId, Instant from, Instant to, EntryType type, Pageable pageable);
+
+    @Query("""
+        SELECT COALESCE(SUM(p.amount),0) AS sum FROM Posting p
+        WHERE p.accountId = :accountId AND p.postedAt <= :at""")
+    long sumPostedUpTo(UUID accountId, Instant at);
 }

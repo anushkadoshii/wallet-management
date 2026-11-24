@@ -53,6 +53,13 @@ public class AccountController {
         BalanceResponse balanceResponse = BalanceResponse.from(bal);
         return balanceResponse;
     }
+
+    @GetMapping("/{id}/balance/as-of")
+    public BalanceAsOfResponse balanceAsOf(@PathVariable UUID id, @RequestParam Instant at) {
+        long sum = accountService.getBalanceAsOf(id, at);
+        return new BalanceAsOfResponse(id, at, sum);
+    }
+    
     
     @GetMapping("/{id}/statement")
     public StatementResponse statement(

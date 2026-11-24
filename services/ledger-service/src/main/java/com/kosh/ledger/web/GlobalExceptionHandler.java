@@ -14,11 +14,13 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.kosh.ledger.domain.InvalidStatusChangeException;
+import com.kosh.ledger.idempotency.IdempotencyKeyReusedException;
 import com.kosh.ledger.service.AccountNotActiveException;
 import com.kosh.ledger.service.AccountNotFoundException;
 import com.kosh.ledger.service.EntryNotFoundException;
@@ -41,7 +43,7 @@ public class GlobalExceptionHandler {
 
     // 422: a well-formed request, but a business rule says no
     @ExceptionHandler({InsufficientFundsException.class, AccountNotActiveException.class,
-            InvalidEntryException.class})
+            InvalidEntryException.class, IdempotencyKeyReusedException.class})
     public ResponseEntity<ApiError> businessRule(RuntimeException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage(), request);
     }
@@ -62,7 +64,7 @@ public class GlobalExceptionHandler {
 
     // 400: the request itself is broken
     @ExceptionHandler({InvalidAccountException.class, MissingRequestHeaderException.class,
-            HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+            HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ApiError> badRequest(Exception ex, HttpServletRequest request) {
         String message;
         if (ex instanceof HttpMessageNotReadableException) {

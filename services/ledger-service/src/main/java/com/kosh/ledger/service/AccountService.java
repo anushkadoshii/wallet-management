@@ -78,4 +78,12 @@ public class AccountService {
         account.changeStatus(newStatus);
         return account;
     }
+
+    @Transactional(readOnly = true)
+    public long getBalanceAsOf(UUID accountId, Instant at) {
+        if (!accounts.existsById(accountId)) {
+            throw new AccountNotFoundException(accountId);
+        }
+        return postings.sumPostedUpTo(accountId, at);
+    }
 }

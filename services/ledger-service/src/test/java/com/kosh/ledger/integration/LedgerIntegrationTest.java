@@ -3,6 +3,8 @@ package com.kosh.ledger.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -21,6 +23,7 @@ import com.kosh.ledger.invariant.InvariantChecker;
 import com.kosh.ledger.repository.AccountRepository;
 import com.kosh.ledger.repository.BalanceRepository;
 import com.kosh.ledger.repository.JournalEntryRepository;
+import com.kosh.ledger.service.AccountNotFoundException;
 import com.kosh.ledger.service.AccountService;
 import com.kosh.ledger.service.InsufficientFundsException;
 import com.kosh.ledger.service.LedgerService;
@@ -139,4 +142,25 @@ class LedgerIntegrationTest {
             jdbc.update("UPDATE balance SET posted = posted - 1 WHERE account_id = ?", alice);
         }
     }
+
+    @Test
+    void balanceAsOfSumsPostingsUpToThatTime() {
+        UUID alice = newWallet();
+        UUID bob = newWallet();
+        UUID topUpId = ledger.topUp("it-" + UUID.randomUUID(), alice, 1000);
+        UUID transferId = ledger.transfer("it-" + UUID.randomUUID(), alice, bob, 300);
+
+        Instant topUpAt = ledger.getEntry(topUpId).getPostedAt();
+        Instant transferAt = ledger.getEntry(transferId).getPostedAt();
+
+        assertThat(accountService.getBalanceAsOf(alice, topUpAt.minus(1, ChronoUnit.MICROS))).isEqualTo(0);
+        assertThat(accountService.getBalanceAsOf(alice, topUpAt)).isEqualTo(1000);
+        assertThat(accountService.getBalanceAsOf(alice, transferAt.minus(1, ChronoUnit.MICROS))).isEqualTo(1000);
+        assertThat(accountService.getBalanceAsOf(alice, transferAt)).isEqualTo(700);
+        assertThat(accountService.getBalanceAsOf(alice, Instant.parse("9999-01-01T00:00:00Z"))).isEqualTo(700).isEqualTo(posted(alice));
+        assertThat(accountService.getBalanceAsOf(bob, transferAt)).isEqualTo(300);
+        assertThatThrownBy(() -> accountService.getBalanceAsOf(UUID.randomUUID(), Instant.now())).isInstanceOf(AccountNotFoundException.class);
+    }
+
+
 }
