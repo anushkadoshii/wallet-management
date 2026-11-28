@@ -20,7 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
+import com.kosh.ledger.config.LedgerProperties;
+import com.kosh.ledger.config.OverdraftStrategy;
 import com.kosh.ledger.domain.Account;
 import com.kosh.ledger.domain.AccountStatus;
 import com.kosh.ledger.domain.EntryType;
@@ -42,7 +45,9 @@ public class LedgerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new LedgerService(accounts, balances, entries);
+        LedgerProperties properties = new LedgerProperties(OverdraftStrategy.CONDITIONAL);
+        TransactionRunner transactions = new TransactionRunner(mock(PlatformTransactionManager.class), properties);
+        service = new LedgerService(accounts, balances, entries, properties, transactions);
     }
 
     // Helper Methods

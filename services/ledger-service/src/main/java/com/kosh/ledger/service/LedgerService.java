@@ -1,8 +1,10 @@
 package com.kosh.ledger.service;
 
+import com.kosh.ledger.config.LedgerProperties;
 import com.kosh.ledger.domain.Account;
 import com.kosh.ledger.domain.AccountStatus;
 import com.kosh.ledger.domain.AccountType;
+import com.kosh.ledger.domain.Balance;
 import com.kosh.ledger.domain.EntryType;
 import com.kosh.ledger.domain.JournalEntry;
 import com.kosh.ledger.repository.AccountRepository;
@@ -24,22 +26,31 @@ public class LedgerService {
     private final AccountRepository accounts;
     private final BalanceRepository balances;
     private final JournalEntryRepository entries;
+    private final LedgerProperties properties;
+    private final TransactionRunner transactions;
 
     // constructor injection. Spring sees this constructor and passes in the repositories.
     public LedgerService(AccountRepository accounts,
                          BalanceRepository balances,
-                         JournalEntryRepository entries) {
+                         JournalEntryRepository entries,
+                         LedgerProperties properties,
+                         TransactionRunner transactions) {
         this.accounts = accounts;
         this.balances = balances;
         this.entries = entries;
+        this.properties = properties;
+        this.transactions = transactions;
     }
 
-    @Transactional
     public UUID post(EntryRequest req) {
         //Check the request itself. No database yet, so it's cheap.
         validate(req);
 
-        // combine lines per account. A TreeMap keeps its keys SORTED, so looping over it later gives ascending account-id order for free.
+        return transactions.inTransaction(() -> postInTransaction(req));
+    }
+
+    private UUID postInTransaction(EntryRequest req) {
+         // combine lines per account. A TreeMap keeps its keys SORTED, so looping over it later gives ascending account-id order for free.
         Map<UUID, Long> netByAccount = new TreeMap<>();
         for (EntryRequest.Line line : req.lines()) {
             netByAccount.merge(line.accountId(), line.amount(), Long::sum);
@@ -57,25 +68,50 @@ public class LedgerService {
         }
         entries.save(entry);   // cascade = PERSIST saves the postings too
 
-        // Balances last, in ascending id order. Hot rows stay locked for the shortest time.
-        for (Map.Entry<UUID, Long> e : netByAccount.entrySet()) {
-            UUID accountId = e.getKey();
-            long net = e.getValue();
-            if (net < 0) {
-                long amount = -net;                       // debit methods take a positive amount
-                if (balances.debit(accountId, amount) == 0) {
-                    throw new InsufficientFundsException(accountId, amount);   // → rollback
-                }
-            } else if (net > 0) {
-                if (balances.credit(accountId, net) == 0) {
-                    // Every account gets a balance row, so this means a bug, not a user error.
-                    throw new IllegalStateException("No balance row for account " + accountId);
-                }
-            }
-            // net == 0: the lines cancel out for this account, so there's nothing to update
+        switch (properties.overdraftStrategy()) {
+            case CONDITIONAL -> updateBalancesConditionally(netByAccount);
+            case PESSIMISTIC -> updateBalancesInJava(balances.findAllForUpdate(netByAccount.keySet()), netByAccount);
+            case OPTIMISTIC, SERIALIZABLE -> updateBalancesInJava(balances.findAllById(netByAccount.keySet()), netByAccount);
         }
 
         return entry.getId();
+    }
+
+    private void updateBalancesConditionally(Map<UUID, Long> netByAccount) {
+        for (Map.Entry<UUID, Long> e: netByAccount.entrySet()) {
+            UUID accountId = e.getKey();
+            long net = e.getValue();
+            if (net < 0) {
+                long amount = -net;
+                if (balances.debit(accountId, amount) == 0) {
+                    throw new InsufficientFundsException(accountId, amount);
+                }
+            } else if (net > 0) {
+                if (balances.credit(accountId, net) == 0) {
+                    throw new IllegalStateException("No balance row for account " + accountId);
+                }
+            }
+        }
+    }
+
+    private void updateBalancesInJava(List<Balance> loaded, Map<UUID, Long> netByAccount) {
+        Map<UUID, Balance> byId = new HashMap<>();
+        for (Balance b : loaded) {
+            byId.put(b.getAccountId(), b);
+        }
+        for (Map.Entry<UUID, Long> e : netByAccount.entrySet()) {
+            UUID accountId = e.getKey();
+            long net = e.getValue();
+            Balance b = byId.get(accountId);
+            if (b == null) {
+                throw new IllegalStateException("No balance row for account " + accountId);
+            }
+            if (net < 0 && !b.isOverdraftAllowed() && b.getAvailable() < -net) {
+                throw new InsufficientFundsException(accountId, -net);
+            }
+            b.applyNet(net); 
+        }
+        balances.flush();   
     }
 
     private void validate(EntryRequest req) {
@@ -130,7 +166,6 @@ public class LedgerService {
         }
     }
 
-    @Transactional 
     public UUID transfer(String idempotencyKey, UUID fromAccountId, UUID toAccountId, long amount) {
         if (fromAccountId.equals(toAccountId)) {
             throw new InvalidEntryException("Cannot transfer to same account");
@@ -149,7 +184,6 @@ public class LedgerService {
         return post(req);
     }
 
-    @Transactional 
     public UUID topUp(String idempotencyKey, UUID walletId, long amount) {
         Account bankClearing = accounts.findByType(AccountType.BANK_CLEARING)
                 .orElseThrow(() -> new IllegalStateException("BANK_CLEARING account missing"));
@@ -172,4 +206,6 @@ public class LedgerService {
         return entries.findWithPostingsById(entryId)
                 .orElseThrow(() -> new EntryNotFoundException(entryId));
     }
+
+
 }

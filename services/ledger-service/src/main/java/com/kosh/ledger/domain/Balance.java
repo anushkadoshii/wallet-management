@@ -23,6 +23,7 @@ public class Balance {
     private boolean overdraftAllowed;
 
     @Column(nullable = false)
+    @Version 
     private long version;
 
     @Column(name = "updated_at", nullable = false)
@@ -33,6 +34,11 @@ public class Balance {
     public Balance(UUID accountId, boolean overdraftAllowed) {
         this.accountId = accountId;
         this.overdraftAllowed = overdraftAllowed;
+        this.updatedAt = Instant.now();
+    }
+
+    public void applyNet(long net) {
+        this.posted += net;
         this.updatedAt = Instant.now();
     }
 

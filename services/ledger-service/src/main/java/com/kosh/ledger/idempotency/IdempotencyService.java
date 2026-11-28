@@ -8,7 +8,8 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+
+import com.kosh.ledger.service.TransactionRunner;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -18,14 +19,19 @@ public class IdempotencyService {
     private static final String USER_ID = "anonymous";
     private final IdempotencyRecordRepository records;
     private final JsonMapper json;
+    private final TransactionRunner transactions;
 
-    public IdempotencyService(IdempotencyRecordRepository records, JsonMapper json) {
+    public IdempotencyService(IdempotencyRecordRepository records, JsonMapper json, TransactionRunner transactions) {
         this.records = records;
         this.json = json;
+        this.transactions = transactions;
     }
 
-    @Transactional  
     public <T> IdempotentResult<T> execute(String key, Object request, Class<T> responseType, Supplier<T> action) {
+        return transactions.inTransaction(() -> executeInTransaction(key, request, responseType, action));
+    }
+
+    private <T> IdempotentResult<T> executeInTransaction(String key, Object request, Class<T> responseType, Supplier<T> action) {
         IdempotencyRecordId id = new IdempotencyRecordId(USER_ID, key);
         String hash = sha256(json.writeValueAsString(request));
         Optional<IdempotencyRecord> existing = records.findById(id);
